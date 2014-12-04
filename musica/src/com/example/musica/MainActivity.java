@@ -6,26 +6,26 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.app.Activity;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Message;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 public class MainActivity extends Activity implements OnClickListener {
 
-	BufferedReader reader;
-	PrintWriter writer;
-	Socket sock;
-	int contador=0;
-	LinearLayout layoutBotones;
+	private BufferedReader reader;
+	private PrintWriter writer;
+	private Socket sock;
+	private int contador=0;
+	private LinearLayout layoutBotones;
+	private String direccion;
+	private AsynckConnection conection;
 	
     @Override
     public void onCreate(Bundle savedInstanceState) 
@@ -33,29 +33,9 @@ public class MainActivity extends Activity implements OnClickListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         inicializarElementos();
-        setUpNetworking();
-        Thread hilo = new Thread(new Runnable() {
- 	       @Override
- 	       public void run() {
- 	    	   String mensaje;
- 				try
- 				{
- 					while((mensaje = reader.readLine())!=null)
- 					{
- 						System.out.println("Leido " + mensaje);
- 						 Message msg = new Message();
- 					      msg.obj = mensaje;
- 					      puente.sendMessage(msg);
- 					}	 
- 				}
- 				catch (Exception ex) 
- 				{
- 					ex.printStackTrace();
- 				}
- 	        }
- 	       
- 	      });
- 	hilo.start();
+        direccion = getIntent().getExtras().getString("direccionIp");
+        conection = new AsynckConnection();
+        conection.execute(direccion);
     }
     private void inicializarElementos() 
     {
@@ -75,14 +55,30 @@ public class MainActivity extends Activity implements OnClickListener {
 		switch (item.getItemId())
 		{
 			case R.id.actualizar:
-		
+				
 				if(sock.isConnected())
 				{
-										
+						try 
+						{
+							layoutBotones.removeAllViews();
+							sock.close();
+							conection.cancel(true);
+							conection = null;
+							conection = new AsynckConnection();
+							conection.execute(direccion); 
+						} 
+						catch (IOException e) 
+						{
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}				
 				}
-				setUpNetworking();
-			
-			
+				else
+				{
+					setUpNetworking(direccion);
+				}
+				
+							
 				return true;
 			default:
 				return super.onMenuItemSelected(featureId, item);
@@ -108,11 +104,11 @@ public class MainActivity extends Activity implements OnClickListener {
 		}
 		
 	}
-	private void setUpNetworking()
+	private void setUpNetworking(String direccion)
 	{
 		try
 		{
-			sock = new Socket("186.34.2.255",5000);
+			sock = new Socket(direccion,5000);
 			InputStreamReader streamReader = new InputStreamReader(sock.getInputStream());
 			reader = new BufferedReader(streamReader);
 			writer = new PrintWriter(sock.getOutputStream());
@@ -123,18 +119,46 @@ public class MainActivity extends Activity implements OnClickListener {
 			e.printStackTrace();
 		}
 	}
-    private Handler puente = new Handler() {
-    	  @Override
-    	  public void handleMessage(Message msg) 
-    	  {
-    		
-    		Button boton = new Button(MainActivity.this);
+   
+    	 
+   class AsynckConnection extends AsyncTask<String, Message, Void>
+   {
+
+		@Override
+		protected Void doInBackground(String... params)
+		{
+			 setUpNetworking(params[0]);
+			String mensaje;
+				try
+				{
+					while((mensaje = reader.readLine())!=null)
+					{
+						System.out.println("Leido " + mensaje);
+						 Message msg = new Message();
+					      msg.obj = mensaje;
+					     publishProgress(msg);
+					}	 
+				}
+				catch (Exception ex) 
+				{
+					ex.printStackTrace();
+				}
+			return null;
+		}
+
+		@Override
+		protected void onProgressUpdate(Message... values)
+		{
+			Button boton = new Button(MainActivity.this);
     		boton.setId(contador);
     		boton.setOnClickListener(MainActivity.this);
-    		boton.setText(msg.obj+"");
+    		boton.setText(values[0].obj+"");
     		layoutBotones.addView(boton);
     		contador++;
-    	  }
-    	 };
+			super.onProgressUpdate(values);
+		}
+		
+	   
+   }
 
 }
